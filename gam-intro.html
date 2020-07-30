@@ -1,0 +1,1964 @@
+<!DOCTYPE html>
+<html lang="" xml:lang="">
+  <head>
+    <title>Introduction to Generalized Additive Models with R and mgcv</title>
+    <meta charset="utf-8" />
+    <meta name="author" content="Gavin Simpson" />
+    <link href="libs/remark-css/default.css" rel="stylesheet" />
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css" type="text/css" />
+    <link rel="stylesheet" href="slides.css" type="text/css" />
+  </head>
+  <body>
+    <textarea id="source">
+class: inverse, middle, left, my-title-slide, title-slide
+
+# Introduction to Generalized Additive Models with R and mgcv
+### Gavin Simpson
+### 1000–1230 CST (1600–1830 UTC) July 30th, 2020
+
+---
+
+class: inverse middle center big-subsection
+
+
+
+# Welcome
+
+???
+
+I'm live streaming today from Treaty 4 lands. These are the territories of the nêhiyawak (nay-hi-yuh-wuk, Cree), Anihšināpēk (uh-nish-i-naa-payk, Saulteaux), Dakota, Lakota, Nakoda, and the homeland of the Métis/Michif Nation. Today, these lands continue to be the shared territory of many diverse peoples.
+
+---
+
+# Logistics
+
+## Slides
+
+Slidedeck: [bit.ly/gam-webinar](https://bit.ly/gam-webinar)
+Sources: [bit.ly/gam-webinar-git](https://bit.ly/gam-webinar-git)
+
+Direct download a ZIP of everything: [bit.ly/gam-webinar-zip](https://bit.ly/gam-webinar-zip)
+
+Unpack the zip &amp; remember where you put it
+
+## Q &amp; A
+
+Add questions to Google Doc: [bit.ly/gam-webinar-qa](https://bit.ly/gam-webinar-qa)
+
+## Recording
+
+Livestream will be recorded &amp;mdash; [youtu.be/sgw4cu8hrZM](https://youtu.be/sgw4cu8hrZM)
+
+---
+
+# Donation
+
+In lieu of not charging for this webinar, if you are able to, financially, please make a donation to the University of Regina's **Student Emergency Fund**
+
+&lt;https://giving.uregina.ca/student-emergency-fund&gt;
+
+---
+
+# Today's topics
+
+* What are GAMs?
+
+* How to fit GAMs in R with **mgcv**
+
+* Model Checking
+
+* Model Diagnostics
+
+* Examples
+
+---
+class: inverse middle center subsection
+
+# Motivating example
+
+---
+
+# HadCRUT4 time series
+
+![](gam-intro_files/figure-html/hadcrut-temp-example-1.svg)&lt;!-- --&gt;
+
+???
+
+Hadley Centre NH temperature record ensemble
+
+How would you model the trend in these data?
+
+---
+
+# Linear Models
+
+`$$y_i \sim \mathcal{N}(\mu_i, \sigma^2)$$`
+
+`$$\mu_i = \beta_0 + \beta_1 x_{1i} + \beta_2 x_{2i} + \cdots + \beta_j x_{ji}$$`
+
+Assumptions
+
+1. linear effects of covariates are good approximation of the true effects
+2. conditional on the values of covariates, `\(y_i | \mathbf{X} \sim \mathcal{N}(0, \sigma^2)\)`
+3. this implies all observations have the same *variance*
+4. `\(y_i | \mathbf{X}\)` are *independent*
+
+An **additive** model address the first of these
+
+---
+class: inverse center middle
+
+# Why bother with anything more complex?
+
+---
+
+# Is this linear?
+
+![](gam-intro_files/figure-html/hadcrut-temp-example-1.svg)&lt;!-- --&gt;
+
+---
+
+# Polynomials perhaps&amp;hellip;
+
+![](gam-intro_files/figure-html/hadcrut-temp-polynomial-1.svg)&lt;!-- --&gt;
+
+---
+
+# Polynomials perhaps&amp;hellip;
+
+We can keep on adding ever more powers of `\(\boldsymbol{x}\)` to the model &amp;mdash; model selection problem
+
+**Runge phenomenon** &amp;mdash; oscillations at the edges of an interval &amp;mdash; means simply moving to higher-order polynomials doesn't always improve accuracy
+
+---
+
+# GAMs offer a solution
+
+---
+
+# HadCRUT data set
+
+
+```r
+library('readr')
+library('dplyr')
+URL &lt;-  "https://bit.ly/hadcrutv4"
+gtemp &lt;- read_delim(URL, delim = ' ', col_types = 'nnnnnnnnnnnn', col_names = FALSE) %&gt;%
+    select(num_range('X', 1:2)) %&gt;% setNames(nm = c('Year', 'Temperature'))
+```
+
+[File format](https://www.metoffice.gov.uk/hadobs/hadcrut4/data/current/series_format.html)
+
+---
+
+# HadCRUT data set
+
+
+```r
+gtemp
+```
+
+```
+## # A tibble: 171 x 2
+##     Year Temperature
+##    &lt;dbl&gt;       &lt;dbl&gt;
+##  1  1850      -0.336
+##  2  1851      -0.159
+##  3  1852      -0.107
+##  4  1853      -0.177
+##  5  1854      -0.071
+##  6  1855      -0.19 
+##  7  1856      -0.378
+##  8  1857      -0.405
+##  9  1858      -0.4  
+## 10  1859      -0.215
+## # … with 161 more rows
+```
+
+---
+
+# Fitting a GAM
+
+
+```r
+library('mgcv')
+m &lt;- gam(Temperature ~ s(Year), data = gtemp, method = 'REML')
+summary(m)
+```
+
+.smaller[
+
+```
+## 
+## Family: gaussian 
+## Link function: identity 
+## 
+## Formula:
+## Temperature ~ s(Year)
+## 
+## Parametric coefficients:
+##              Estimate Std. Error t value Pr(&gt;|t|)  
+## (Intercept) -0.025327   0.009847  -2.572    0.011 *
+## ---
+## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+## 
+## Approximate significance of smooth terms:
+##           edf Ref.df     F p-value    
+## s(Year) 7.784   8.62 138.5  &lt;2e-16 ***
+## ---
+## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+## 
+## R-sq.(adj) =  0.875   Deviance explained = 88.1%
+## -REML = -89.311  Scale est. = 0.016581  n = 171
+```
+]
+
+---
+
+# Fitted GAM
+
+![](gam-intro_files/figure-html/hadcrtemp-plot-gam-1.svg)&lt;!-- --&gt;
+
+---
+
+# GAMs
+
+---
+
+# Generalized Additive Models
+
+&lt;br /&gt;
+
+![](resources/tradeoff-slider.png)
+
+.references[Source: [GAMs in R by Noam Ross](https://noamross.github.io/gams-in-r-course/)]
+
+???
+
+GAMs are an intermediate-complexity model
+
+* can learn from data without needing to be informed by the user
+* remain interpretable because we can visualize the fitted features
+
+---
+
+# How is a GAM different?
+
+In LM we model the mean of data as a sum of linear terms:
+
+`$$y_i = \beta_0 +\sum_j \color{red}{ \beta_j x_{ji}} +\epsilon_i$$`
+
+A GAM is a sum of _smooth functions_ or _smooths_
+
+`$$y_i = \beta_0 + \sum_j \color{red}{s_j(x_{ji})} + \epsilon_i$$`
+
+where `\(\epsilon_i \sim N(0, \sigma^2)\)`, `\(y_i \sim \text{Normal}\)` (for now)
+
+Call the above equation the **linear predictor** in both cases
+
+---
+
+# Fitting a GAM in R
+
+```r
+model &lt;- gam(y ~ s(x1) + s(x2) + te(x3, x4), # formuala describing model
+             data = my_data_frame,           # your data
+             method = 'REML',                # or 'ML'
+             family = gaussian)              # or something more exotic
+```
+
+`s()` terms are smooths of one or more variables
+
+`te()` terms are the smooth equivalent of *main effects + interactions*
+
+---
+
+# How did `gam()` *know*?
+
+![](gam-intro_files/figure-html/hadcrtemp-plot-gam-1.svg)&lt;!-- --&gt;
+
+---
+class: inverse
+background-image: url('./resources/rob-potter-398564.jpg')
+background-size: contain
+
+# What magic is this?
+
+.footnote[
+&lt;a style="background-color:black;color:white;text-decoration:none;padding:4px 6px;font-family:-apple-system, BlinkMacSystemFont, &amp;quot;San Francisco&amp;quot;, &amp;quot;Helvetica Neue&amp;quot;, Helvetica, Ubuntu, Roboto, Noto, &amp;quot;Segoe UI&amp;quot;, Arial, sans-serif;font-size:12px;font-weight:bold;line-height:1.2;display:inline-block;border-radius:3px;" href="https://unsplash.com/@robpotter?utm_medium=referral&amp;amp;utm_campaign=photographer-credit&amp;amp;utm_content=creditBadge" target="_blank" rel="noopener noreferrer" title="Download free do whatever you want high-resolution photos from Rob Potter"&gt;&lt;span style="display:inline-block;padding:2px 3px;"&gt;&lt;svg xmlns="http://www.w3.org/2000/svg" style="height:12px;width:auto;position:relative;vertical-align:middle;top:-1px;fill:white;" viewBox="0 0 32 32"&gt;&lt;title&gt;&lt;/title&gt;&lt;path d="M20.8 18.1c0 2.7-2.2 4.8-4.8 4.8s-4.8-2.1-4.8-4.8c0-2.7 2.2-4.8 4.8-4.8 2.7.1 4.8 2.2 4.8 4.8zm11.2-7.4v14.9c0 2.3-1.9 4.3-4.3 4.3h-23.4c-2.4 0-4.3-1.9-4.3-4.3v-15c0-2.3 1.9-4.3 4.3-4.3h3.7l.8-2.3c.4-1.1 1.7-2 2.9-2h8.6c1.2 0 2.5.9 2.9 2l.8 2.4h3.7c2.4 0 4.3 1.9 4.3 4.3zm-8.6 7.5c0-4.1-3.3-7.5-7.5-7.5-4.1 0-7.5 3.4-7.5 7.5s3.3 7.5 7.5 7.5c4.2-.1 7.5-3.4 7.5-7.5z"&gt;&lt;/path&gt;&lt;/svg&gt;&lt;/span&gt;&lt;span style="display:inline-block;padding:2px 3px;"&gt;Rob Potter&lt;/span&gt;&lt;/a&gt;
+]
+
+---
+class: inverse
+background-image: url('resources/wiggly-things.png')
+background-size: contain
+
+???
+
+---
+
+
+
+# Wiggly things
+
+.center[![](resources/spline-anim.gif)]
+
+???
+
+GAMs use splines to represent the non-linear relationships between covariates, here `x`, and the response variable on the `y` axis.
+
+---
+
+# Basis expansions
+
+In the polynomial models we used a polynomial basis expansion of `\(\boldsymbol{x}\)`
+
+* `\(\boldsymbol{x}^0 = \boldsymbol{1}\)` &amp;mdash; the model constant term
+* `\(\boldsymbol{x}^1 = \boldsymbol{x}\)` &amp;mdash; linear term
+* `\(\boldsymbol{x}^2\)`
+* `\(\boldsymbol{x}^3\)`
+* &amp;hellip;
+
+---
+
+# Splines
+
+Splines are *functions* composed of simpler functions
+
+Simpler functions are *basis functions* &amp; the set of basis functions is a *basis*
+
+When we model using splines, each basis function `\(b_k\)` has a coefficient `\(\beta_k\)`
+
+Resultant spline is a the sum of these weighted basis functions, evaluated at the values of `\(x\)`
+
+`$$s(x) = \sum_{k = 1}^K \beta_k b_k(x)$$`
+
+---
+
+# Splines formed from basis functions
+
+![](gam-intro_files/figure-html/basis-functions-1.svg)&lt;!-- --&gt;
+
+???
+
+Splines are built up from basis functions
+
+Here I'm showing a cubic regression spline basis with 10 knots/functions
+
+We weight each basis function to get a spline. Here all the basisi functions have the same weight so they would fit a horizontal line
+
+---
+
+# Weight basis functions &amp;#8680; spline
+
+
+
+.center[![](resources/basis-fun-anim.gif)]
+
+???
+
+But if we choose different weights we get more wiggly spline
+
+Each of the splines I showed you earlier are all generated from the same basis functions but using different weights
+
+---
+
+# How do GAMs learn from data?
+
+![](gam-intro_files/figure-html/example-data-figure-1.svg)&lt;!-- --&gt;
+
+???
+
+How does this help us learn from data?
+
+Here I'm showing a simulated data set, where the data are drawn from the orange functions, with noise. We want to learn the orange function from the data
+
+---
+
+# Maximise penalised log-likelihood &amp;#8680; &amp;beta;
+
+
+
+.center[![](resources/gam-crs-animation.gif)]
+
+???
+
+Fitting a GAM involves finding the weights for the basis functions that produce a spline that fits the data best, subject to some constraints
+
+
+---
+class: inverse middle center subsection
+
+# Avoid overfitting our sample
+
+---
+class: inverse center middle large-subsection
+
+# How wiggly?
+
+$$
+\int_{\mathbb{R}} [f^{\prime\prime}]^2 dx = \boldsymbol{\beta}^{\mathsf{T}}\mathbf{S}\boldsymbol{\beta}
+$$
+
+---
+class: inverse center middle large-subsection
+
+# Penalised fit
+
+$$
+\mathcal{L}_p(\boldsymbol{\beta}) = \mathcal{L}(\boldsymbol{\beta}) - \frac{1}{2} \lambda\boldsymbol{\beta}^{\mathsf{T}}\mathbf{S}\boldsymbol{\beta}
+$$
+
+---
+
+# Wiggliness
+
+`$$\int_{\mathbb{R}} [f^{\prime\prime}]^2 dx = \boldsymbol{\beta}^{\mathsf{T}}\mathbf{S}\boldsymbol{\beta} = \large{W}$$`
+
+(Wiggliness is 100% the right mathy word)
+
+We penalize wiggliness to avoid overfitting
+
+---
+
+# Making wiggliness matter
+
+`\(W\)` measures **wiggliness**
+
+(log) likelihood measures closeness to the data
+
+We use a **smoothing parameter** `\(\lambda\)` to define the trade-off, to find
+the spline coefficients `\(B_k\)` that maximize the **penalized** log-likelihood
+
+`$$\mathcal{L}_p = \log(\text{Likelihood})  - \lambda W$$`
+
+---
+
+# HadCRUT4 time series
+
+![](gam-intro_files/figure-html/hadcrut-temp-penalty-1.svg)&lt;!-- --&gt;
+
+---
+
+# Picking the right wiggliness
+
+.pull-left[
+Two ways to think about how to optimize `\(\lambda\)`:
+
+* Predictive: Minimize out-of-sample error
+* Bayesian:  Put priors on our basis coefficients
+]
+
+.pull-right[
+Many methods: AIC, Mallow's `\(C_p\)`, GCV, ML, REML
+
+* **Practically**, use **REML**, because of numerical stability
+* Hence `gam(..., method='REML')`
+]
+
+.center[
+![Animation of derivatives](./resources/remlgcv.png)
+]
+
+---
+
+# Maximum allowed wiggliness
+
+We set **basis complexity** or "size" `\(k\)`
+
+This is _maximum wigglyness_, can be thought of as number of small functions that make up a curve
+
+Once smoothing is applied, curves have fewer **effective degrees of freedom (EDF)**
+
+EDF &lt; `\(k\)`
+
+---
+
+# Maximum allowed wiggliness
+
+`\(k\)` must be *large enough*, the `\(\lambda\)` penalty does the rest
+
+*Large enough* &amp;mdash; space of functions representable by the basis includes the true function or a close approximation to the tru function
+
+Bigger `\(k\)` increases computational cost
+
+In **mgcv**, default `\(k\)` values are arbitrary &amp;mdash; after choosing the model terms, this is the key user choice
+
+**Must be checked!** &amp;mdash; `gam.check()`
+
+
+---
+
+# GAM summary so far
+
+1. GAMs give us a framework to model  flexible nonlinear relationships
+
+2. Use little functions (**basis functions**) to make big functions (**smooths**)
+
+3. Use a **penalty** to trade off wiggliness/generality 
+
+4. Need to make sure your smooths are **wiggly enough**
+
+---
+
+# Portugese larks
+
+.row[
+.col-7[
+
+
+```r
+library('gamair')
+data(bird)
+
+bird &lt;- transform(bird,
+            crestlark = factor(crestlark),
+            linnet = factor(linnet),
+            e = x / 1000,
+            n = y / 1000)
+head(bird)
+```
+
+```
+##       QUADRICULA TET crestlark linnet      x       y   e    n
+## 13705       NG56   E      &lt;NA&gt;   &lt;NA&gt; 551000 4669000 551 4669
+## 13710       NG56   J      &lt;NA&gt;   &lt;NA&gt; 553000 4669000 553 4669
+## 13715       NG56   P      &lt;NA&gt;   &lt;NA&gt; 555000 4669000 555 4669
+## 13720       NG56   U      &lt;NA&gt;   &lt;NA&gt; 557000 4669000 557 4669
+## 13725       NG56   Z      &lt;NA&gt;   &lt;NA&gt; 559000 4669000 559 4669
+## 13880       NG66   E      &lt;NA&gt;   &lt;NA&gt; 561000 4669000 561 4669
+```
+]
+
+.col-5[
+
+![](gam-intro_files/figure-html/birds-2-1.svg)&lt;!-- --&gt;
+]
+]
+
+---
+ 
+# Portugese larks &amp;mdash; binomial GAM
+
+.row[
+.col-6[
+
+```r
+crest &lt;- gam(crestlark ~ s(e, n, k = 100),
+             data = bird,
+             family = binomial,
+             method = 'REML')
+```
+
+`\(s(e, n)\)` indicated by `s(e, n)` in the formula
+
+Isotropic thin plate spline
+
+`k` sets size of basis dimension; upper limit on EDF
+
+Smoothness parameters estimated via REML
+]
+
+.col-6[
+.smaller[
+
+```r
+summary(crest)
+```
+
+```
+## 
+## Family: binomial 
+## Link function: logit 
+## 
+## Formula:
+## crestlark ~ s(e, n, k = 100)
+## 
+## Parametric coefficients:
+##             Estimate Std. Error z value Pr(&gt;|z|)    
+## (Intercept) -2.24184    0.07785   -28.8   &lt;2e-16 ***
+## ---
+## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+## 
+## Approximate significance of smooth terms:
+##          edf Ref.df Chi.sq p-value    
+## s(e,n) 74.04  86.46  857.3  &lt;2e-16 ***
+## ---
+## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+## 
+## R-sq.(adj) =  0.234   Deviance explained = 25.9%
+## -REML = 2499.8  Scale est. = 1         n = 6457
+```
+]
+]
+]
+
+---
+
+# Portugese larks &amp;mdash; binomial GAM
+
+Model checking with binary data is a pain &amp;mdash; residuals look weird
+
+Alternatively we can aggregate data at the `QUADRICULA` level &amp; fit a binomial count model
+
+.smaller[
+
+```r
+## convert back to numeric
+bird &lt;- transform(bird,
+                  crestlark = as.numeric(as.character(crestlark)),
+                  linnet = as.numeric(as.character(linnet)))
+## some variables to help aggregation
+bird &lt;- transform(bird, tet.n = rep(1, nrow(bird)),
+                  N = rep(1, nrow(bird)), stringsAsFactors = FALSE)
+## set to NA if not surveyed
+bird$N[is.na(as.vector(bird$crestlark))] &lt;- NA
+## aggregate
+bird2 &lt;- aggregate(data.matrix(bird), by = list(bird$QUADRICULA),
+                   FUN = sum, na.rm = TRUE)
+## scale by Quads aggregated
+bird2 &lt;- transform(bird2, e = e / tet.n, n = n / tet.n)
+
+## fit binomial GAM
+crest2 &lt;- gam(cbind(crestlark, N - crestlark) ~ s(e, n, k = 100),
+              data = bird2, family = binomial, method = 'REML')
+```
+]
+
+---
+
+# Model checking
+
+.pull-left[
+.smaller[
+
+```r
+crest3 &lt;- gam(cbind(crestlark, N - crestlark) ~
+                  s(e, n, k = 100),
+              data = bird2, family = quasibinomial,
+              method = 'REML')
+```
+]
+
+Model residuals don't look too bad
+
+Bands of points due to integers
+
+Some overdispersion &amp;mdash; &amp;phi; = 2.32
+]
+
+.pull-right[
+
+```r
+ggplot(data.frame(Fitted = fitted(crest2),
+                  Resid = resid(crest2)),
+       aes(Fitted, Resid)) + geom_point() 
+```
+
+![](gam-intro_files/figure-html/gam-check-aggregated-lark-1.svg)&lt;!-- --&gt;
+]
+
+
+---
+class: inverse center middle subsection
+
+# Model checking
+
+---
+
+# Model checking
+
+So you have a GAM:
+
+- How do you know you have the right degrees of freedom? `gam.check()`
+
+- Diagnosing model issues: `gam.check()` part 2
+
+---
+
+# GAMs are models too
+
+How accurate your predictions will be depends on how good the model is
+
+![](gam-intro_files/figure-html/misspecify-1.svg)&lt;!-- --&gt;
+
+---
+class: inverse center middle
+
+# How do we test how well our model fits?
+
+---
+
+# Simulated data
+
+
+```r
+set.seed(2)
+n &lt;- 400
+x1 &lt;- rnorm(n)
+x2 &lt;- rnorm(n)
+y_val &lt;- 1 + 2*cos(pi*x1) + 2/(1+exp(-5*(x2)))
+y_norm &lt;- y_val + rnorm(n, 0, 0.5)
+y_negbinom &lt;- rnbinom(n, mu = exp(y_val),size=10)
+y_binom &lt;- rbinom(n,1,prob = exp(y_val)/(1+exp(y_val)))
+```
+
+---
+
+# Simulated data
+
+![](gam-intro_files/figure-html/sims_plot-1.svg)&lt;!-- --&gt;
+
+---
+class: inverse middle center
+
+# gam.check() part 1: do you have the right functional form?
+
+---
+
+# How well does the model fit?
+
+- Many choices: k, family, type of smoother, &amp;hellip;
+
+- How do we assess how well our model fits?
+
+---
+
+# Basis size *k*
+
+- Set `k` per term
+
+- e.g. `s(x, k=10)` or `s(x, y, k=100)`
+
+- Penalty removes "extra" wigglyness
+    
+	- *up to a point!*
+
+- (But computation is slower with bigger `k`)
+
+---
+
+# Checking basis size
+
+
+```r
+norm_model_1 &lt;- gam(y_norm~s(x1, k = 4) + s(x2, k = 4), method = 'REML')
+gam.check(norm_model_1)
+```
+
+```
+## 
+## Method: REML   Optimizer: outer newton
+## full convergence after 8 iterations.
+## Gradient range [-0.0003467788,0.0005154578]
+## (score 736.9402 &amp; scale 2.252304).
+## Hessian positive definite, eigenvalue range [0.000346021,198.5041].
+## Model rank =  7 / 7 
+## 
+## Basis dimension (k) checking results. Low p-value (k-index&lt;1) may
+## indicate that k is too low, especially if edf is close to k'.
+## 
+##         k'  edf k-index p-value    
+## s(x1) 3.00 1.00    0.13  &lt;2e-16 ***
+## s(x2) 3.00 2.91    1.04    0.83    
+## ---
+## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+```
+
+---
+
+# Checking basis size
+
+
+```r
+norm_model_2 &lt;- gam(y_norm ~ s(x1, k = 12) + s(x2, k = 4), method = 'REML')
+gam.check(norm_model_2)
+```
+
+```
+## 
+## Method: REML   Optimizer: outer newton
+## full convergence after 11 iterations.
+## Gradient range [-5.658609e-06,5.392657e-06]
+## (score 345.3111 &amp; scale 0.2706205).
+## Hessian positive definite, eigenvalue range [0.967727,198.6299].
+## Model rank =  15 / 15 
+## 
+## Basis dimension (k) checking results. Low p-value (k-index&lt;1) may
+## indicate that k is too low, especially if edf is close to k'.
+## 
+##          k'   edf k-index p-value   
+## s(x1) 11.00 10.84    0.99    0.38   
+## s(x2)  3.00  2.98    0.86    0.01 **
+## ---
+## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+```
+
+---
+
+# Checking basis size
+
+
+```r
+norm_model_3 &lt;- gam(y_norm ~ s(x1, k = 12) + s(x2, k = 12),method = 'REML')
+gam.check(norm_model_3)
+```
+
+```
+## 
+## Method: REML   Optimizer: outer newton
+## full convergence after 8 iterations.
+## Gradient range [-1.136192e-08,6.812328e-13]
+## (score 334.2084 &amp; scale 0.2485446).
+## Hessian positive definite, eigenvalue range [2.812271,198.6868].
+## Model rank =  23 / 23 
+## 
+## Basis dimension (k) checking results. Low p-value (k-index&lt;1) may
+## indicate that k is too low, especially if edf is close to k'.
+## 
+##          k'   edf k-index p-value
+## s(x1) 11.00 10.85    0.98    0.31
+## s(x2) 11.00  7.95    0.95    0.15
+```
+
+---
+
+# Checking basis size
+
+![](gam-intro_files/figure-html/gam_check_norm4-1.svg)&lt;!-- --&gt;
+
+---
+class: inverse middle center subsection
+
+# Model diagnostics
+
+---
+class: inverse middle center
+
+# Using gam.check() part 2: visual checks
+
+---
+
+# gam.check() plots
+
+`gam.check()` creates 4 plots: 
+
+1. Quantile-quantile plots of residuals. If the model is right, should follow 1-1 line
+
+2. Histogram of residuals
+
+3. Residuals vs. linear predictor
+
+4. Observed vs. fitted values
+
+`gam.check()` uses deviance residuals by default
+
+---
+
+# Gaussian data, Gaussian model
+
+
+```r
+norm_model &lt;- gam(y_norm ~ s(x1, k=12) + s(x2, k=12), method = 'REML')
+gam.check(norm_model, rep = 500)
+```
+
+![](gam-intro_files/figure-html/gam_check_plots1-1.svg)&lt;!-- --&gt;
+
+---
+
+# Negative binomial data, Poisson model
+
+
+```r
+pois_model &lt;- gam(y_negbinom ~ s(x1, k=12) + s(x2, k=12), family=poisson, method= 'REML')
+gam.check(pois_model, rep = 500)
+```
+
+![](gam-intro_files/figure-html/gam_check_plots2-1.svg)&lt;!-- --&gt;
+
+---
+
+# NB data, NB model
+
+
+```r
+negbin_model &lt;- gam(y_negbinom ~ s(x1, k=12) + s(x2, k=12), family = nb, method = 'REML')
+gam.check(negbin_model, rep = 500)
+```
+
+![](gam-intro_files/figure-html/gam_check_plots3-1.svg)&lt;!-- --&gt;
+
+---
+
+# NB data, NB model
+
+
+```r
+appraise(negbin_model)
+```
+
+![](gam-intro_files/figure-html/appraise-gam-check-example-1.svg)&lt;!-- --&gt;
+
+---
+class: inverse center middle
+
+# Model selection
+
+---
+
+# Model selection
+
+Model (or variable) selection &amp;mdash; an important area of theoretical and applied interest
+
+- In statistics we aim for a balance between *fit* and *parsimony*
+
+- In applied research we seek the set of covariates with strongest effects on `\(y\)`
+
+We seek a subset of covariates that improves *interpretability* and *prediction accuracy*
+
+---
+class: inverse center middle
+
+# Shrinkage &amp; additional penalties
+
+---
+
+# Shrinkage &amp; additional penalties
+
+Smoothing parameter estimation allows selection of a wide range of potentially complex functions for smooths...
+
+But, cannot remove a term entirely from the model because the penalties used act only on the *range space* of a spline basis. The *null space* of the basis is unpenalised.
+
+- **Null space** &amp;mdash; the basis functions that are smooth (constant, linear)
+
+- **Range space** &amp;mdash; the basis functions that are wiggly
+
+---
+
+# Shrinkage &amp; additional penalties
+
+**mgcv** has two ways to penalize the null space, i.e. to do selection
+
+- *double penalty approach* via `select = TRUE`
+
+- *shrinkage approach* via special bases for
+    
+	- thin plate spline (default, `s(..., bs = 'ts')`),
+    
+	- cubic splines  (`s(..., bs = 'cs')`)
+
+**double penalty** tends to works best, but applies to all smooths *and* doubles the number of smoothness parameters to estimate
+
+Other shrinkage/selection approaches *are available* in other software
+
+---
+
+# Empirical Bayes...?
+
+`\(\mathbf{S}_j\)` can be viewed as prior precision matrices and `\(\lambda_j\)` as improper Gaussian priors on the spline coefficients.
+
+The impropriety derives from `\(\mathbf{S}_j\)` not being of full rank (zeroes in `\(\mathbf{\Lambda}_j\)`).
+
+Both the double penalty and shrinkage smooths remove the impropriety from the Gaussian prior
+
+---
+# Empirical Bayes...?
+
+- **Double penalty** &amp;mdash; makes no assumption as to how much to shrink the null space. This is determined from the data via estimation of `\(\lambda_j^{*}\)`
+
+- **Shrinkage smooths** &amp;mdash; assumes null space should be shrunk less than the wiggly part
+
+Marra &amp; Wood (2011) show that the double penalty and the shrinkage smooth approaches
+
+- performed significantly better than alternatives in terms of *predictive ability*, and
+
+- performed as well as alternatives in terms of variable selection
+
+---
+
+# Example
+
+- Simulate Poisson counts
+- 4 known functions (left)
+- 2 spurious covariates (`runif()` &amp; not shown)
+
+
+```r
+## an example of automatic model selection via null space penalization
+set.seed(3)
+n &lt;- 200
+dat &lt;- gamSim(1, n=n, scale=.15, dist='poisson', verbose = FALSE) ## simulate data
+dat &lt;- transform(dat, x4 = runif(n, 0, 1), x5 = runif(n, 0, 1),
+                 f4 = rep(0, n), f5 = rep(0, n))   ## spurious
+```
+
+```r
+b &lt;- gam(y ~ s(x0) + s(x1) + s(x2) + s(x3) +
+             s(x4) + s(x5),
+         data = dat, family = poisson, method = 'REML',
+         select = TRUE)
+```
+
+---
+
+# Example
+
+![](gam-intro_files/figure-html/shrinkage-example-truth-1.svg)&lt;!-- --&gt;
+
+---
+
+# Example
+
+.smaller[
+
+```r
+summary(b)
+```
+
+```
+## 
+## Family: poisson 
+## Link function: log 
+## 
+## Formula:
+## y ~ s(x0) + s(x1) + s(x2) + s(x3) + s(x4) + s(x5)
+## 
+## Parametric coefficients:
+##             Estimate Std. Error z value Pr(&gt;|z|)    
+## (Intercept)  1.21758    0.04082   29.83   &lt;2e-16 ***
+## ---
+## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+## 
+## Approximate significance of smooth terms:
+##             edf Ref.df  Chi.sq p-value    
+## s(x0) 1.7655088      9   5.264  0.0397 *  
+## s(x1) 1.9271040      9  65.356  &lt;2e-16 ***
+## s(x2) 6.1351414      9 156.204  &lt;2e-16 ***
+## s(x3) 0.0002849      9   0.000  0.4068    
+## s(x4) 0.0003044      9   0.000  1.0000    
+## s(x5) 0.1756926      9   0.195  0.2963    
+## ---
+## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+## 
+## R-sq.(adj) =  0.545   Deviance explained = 51.6%
+## -REML = 430.78  Scale est. = 1         n = 200
+```
+]
+
+---
+
+# Example
+
+
+```r
+library('gratia'); draw(b, scales = 'fixed')
+```
+
+![](gam-intro_files/figure-html/shrinkage-example-plot-1.svg)&lt;!-- --&gt;
+
+---
+class: inverse center middle
+
+# Confidence intervals for smooths
+
+---
+
+# Confidence intervals for smooths
+
+`plot.gam()` produces approximate 95% intervals (at +/- 2 SEs)
+
+What do these intervals represent?
+
+Nychka (1988) showed that standard Wahba/Silverman type Bayesian confidence intervals on smooths had good **across-the-function** frequentist coverage properties
+
+When *averaged* over the range of covariate, 1 - &amp;alpha; coverage is approximately 1 - &amp;alpha;
+
+---
+
+# Confidence intervals for smooths
+
+Marra &amp; Wood (2012) extended this theory to the generalised case and explain where the coverage properties failed:
+
+*Mustn't over-smooth too much, which happens when `\(\lambda_j\)` are over-estimated*
+
+Two situations where this might occur
+
+1. where true effect is almost in the penalty null space, `\(\hat{\lambda}_j \rightarrow \infty\)`
+	- ie. close to a linear function
+2. where `\(\hat{\lambda}_j\)` difficult to estimate due to highly correlated covariates
+	- if 2 correlated covariates have different amounts of wiggliness, estimated effects can have degree of smoothness *reversed*
+
+---
+
+# Don't over-smooth
+
+&gt; In summary, we have shown that Bayesian componentwise variable width intervals... for the smooth components of an additive model **should achieve close to nominal *across-the-function* coverage probability**&amp;hellip
+
+Basically
+
+1. Don't over smooth, and
+
+2. Effect of uncertainty due to estimating smoothness parameter is small
+
+---
+
+# Confidence intervals for smooths
+
+Marra &amp; Wood (2012) suggested a solution to situation 1., namely true functions close to the penalty null space.
+
+Smooths are normally subject to *identifiability* constraints (centred), which leads to zero variance where the estimated function crosses the zero line.
+
+Instead, compute intervals for `\(j\)` th smooth as if it alone had the intercept; identifiability constraints go on the other smooth terms.
+
+Use
+
+* `seWithMean = TRUE` in call to `plot.gam()`
+* `overall_uncertainty = TRUE` in call to `gratia::draw()`
+
+---
+
+# Example
+
+![](gam-intro_files/figure-html/setup-confint-example-1.svg)&lt;!-- --&gt;
+
+---
+class: inverse center middle
+
+# *p* values for smooths
+
+---
+
+# *p* values for smooths
+
+*p* values for smooths are approximate:
+
+1. they don't account for the estimation of `\(\lambda_j\)` &amp;mdash; treated as known, hence *p* values are biased low
+
+2. rely on asymptotic behaviour &amp;mdash; they tend towards being right as sample size tends to `\(\infty\)`
+
+---
+
+# *p* values for smooths
+
+...are a test of **zero-effect** of a smooth term
+
+Default *p* values rely on theory of Nychka (1988) and Marra &amp; Wood (2012) for confidence interval coverage
+
+If the Bayesian CI have good across-the-function properties, Wood (2013a) showed that the *p* values have
+
+- almost the correct null distribution
+
+- reasonable power
+
+Test statistic is a form of `\(\chi^2\)` statistic, but with complicated degrees of freedom
+
+---
+
+# *p* values for unpenalized smooths
+
+The results of Nychka (1988) and Marra &amp; Wood (2012) break down if smooth terms are unpenalized
+
+This include i.i.d. Gaussian random effects, (e.g. `bs = "re"`)
+
+Wood (2013b) proposed instead a test based on a likelihood ratio statistic:
+
+- the reference distribution used is appropriate for testing a `\(\mathrm{H}_0\)` on the boundary of the allowed parameter space...
+
+- ...in other words, it corrects for a `\(\mathrm{H}_0\)` that a variance term is zero
+
+---
+
+# *p* values for smooths
+
+Have the best behaviour when smoothness selection is done using **ML**, then **REML**.
+
+Neither of these are the default, so remember to use `method = "ML"` or `method = "REML"` as appropriate
+
+---
+
+# AIC for GAMs
+
+- Comparison of GAMs by a form of AIC is an alternative frequentist approach to model selection
+
+- Rather than using the marginal likelihood, the likelihood of the `\(\mathbf{\beta}_j\)` *conditional* upon `\(\lambda_j\)` is used, with the EDF replacing `\(k\)`, the number of model parameters
+
+- This *conditional* AIC tends to select complex models, especially those with random effects, as the EDF ignores that `\(\lambda_j\)` are estimated
+
+- Wood et al (2016) suggests a correction that accounts for uncertainty in `\(\lambda_j\)`
+
+`$$AIC = -2\mathcal{L}(\hat{\beta}) + 2\mathrm{tr}(\widehat{\mathcal{I}}V^{'}_{\beta})$$`
+
+---
+
+# AIC
+
+In this example, `\(x_3\)`, `\(x_4\)`, and `\(x_5\)` have no effects on `\(y\)`
+
+
+```r
+AIC(b1, b2)
+```
+
+```
+##          df      AIC
+## b1 15.03493 847.7961
+## b2 12.12435 842.9368
+```
+
+When there is *no difference* in compared models, accepts larger model ~16% of the time: consistent with probability AIC chooses a model with 1 extra spurious parameter `\(Pr(\chi^2_1 &gt; 2)\)`
+
+
+```r
+pchisq(2, 1, lower.tail = FALSE)
+```
+
+```
+## [1] 0.1572992
+```
+
+---
+class: inverse middle center subsection
+
+# Example
+
+---
+
+# Atmospheric CO&lt;sub&gt;2&lt;/sub&gt;
+
+
+```r
+data(co2s)
+head(co2s)
+```
+
+```
+##      co2 c.month month
+## 1     NA       1     1
+## 2     NA       2     2
+## 3     NA       3     3
+## 4     NA       4     4
+## 5     NA       5     5
+## 6 313.21       6     6
+```
+
+---
+
+# Atmospheric CO&lt;sub&gt;2&lt;/sub&gt;
+
+
+```r
+ggplot(co2s, aes(x = c.month, y = co2)) + geom_line()
+```
+
+![](gam-intro_files/figure-html/co2-example-2-1.svg)&lt;!-- --&gt;
+
+---
+
+# Atmospheric CO&lt;sub&gt;2&lt;/sub&gt; &amp;mdash; fit naive GAM
+
+.smaller[
+
+```r
+b &lt;- gam(co2 ~ s(c.month, k=300, bs="cr"), data = co2s, method = 'REML')
+summary(b)
+```
+
+```
+## 
+## Family: gaussian 
+## Link function: identity 
+## 
+## Formula:
+## co2 ~ s(c.month, k = 300, bs = "cr")
+## 
+## Parametric coefficients:
+##              Estimate Std. Error t value Pr(&gt;|t|)    
+## (Intercept) 3.382e+02  4.444e-03   76111   &lt;2e-16 ***
+## ---
+## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+## 
+## Approximate significance of smooth terms:
+##              edf Ref.df     F p-value    
+## s(c.month) 205.3  241.4 44646  &lt;2e-16 ***
+## ---
+## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+## 
+## R-sq.(adj) =      1   Deviance explained =  100%
+## -REML = 36.492  Scale est. = 0.0084334  n = 427
+```
+]
+
+---
+
+# Atmospheric CO&lt;sub&gt;2&lt;/sub&gt; &amp;mdash; predict
+
+Predict the next 36 months
+
+
+```r
+pd &lt;- with(co2s, data.frame(c.month = 1:(nrow(co2s)+36)))
+pd &lt;- cbind(pd, predict(b, pd, se = TRUE))
+pd &lt;- transform(pd, upr = fit + (2*se.fit), lwr = fit - (2 * se.fit))
+```
+
+---
+
+# Atmospheric CO&lt;sub&gt;2&lt;/sub&gt; &amp;mdash; predict
+
+
+```r
+ggplot(pd, aes(x = c.month, y = fit)) +
+    geom_ribbon(aes(ymin = lwr, ymax = upr), alpha = 0.2) +
+    geom_line(data = co2s, aes(c.month, co2), col = 'red') +
+    geom_line(alpha = 0.5)
+```
+
+![](gam-intro_files/figure-html/co2-example-5-1.svg)&lt;!-- --&gt;
+
+---
+
+# Atmospheric CO&lt;sub&gt;2&lt;/sub&gt; &amp;mdash; better model
+
+Decompose into
+
+1. a seasonal smooth
+2. a long term trend
+
+
+```r
+b2 &lt;- gam(co2 ~ s(month, bs = "cc") + s(c.month, bs = "cr", k = 300),
+          data = co2s, method = 'REML',
+          knots = list(month = c(0.5, 12.5)))
+```
+
+---
+
+# Atmospheric CO&lt;sub&gt;2&lt;/sub&gt; &amp;mdash; better model
+
+.smaller[
+
+```r
+summary(b2)
+```
+
+```
+## 
+## Family: gaussian 
+## Link function: identity 
+## 
+## Formula:
+## co2 ~ s(month, bs = "cc") + s(c.month, bs = "cr", k = 300)
+## 
+## Parametric coefficients:
+##              Estimate Std. Error t value Pr(&gt;|t|)    
+## (Intercept) 3.382e+02  5.435e-03   62229   &lt;2e-16 ***
+## ---
+## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+## 
+## Approximate significance of smooth terms:
+##                edf Ref.df       F p-value    
+## s(month)     7.251    8.0   169.9  &lt;2e-16 ***
+## s(c.month) 104.823  128.8 55572.6  &lt;2e-16 ***
+## ---
+## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+## 
+## R-sq.(adj) =      1   Deviance explained =  100%
+## -REML = -101.49  Scale est. = 0.012615  n = 427
+```
+]
+
+---
+
+# Atmospheric CO&lt;sub&gt;2&lt;/sub&gt; &amp;mdash; predict
+
+
+```r
+nr &lt;- nrow(co2s)
+pd2 &lt;- with(co2s, data.frame(c.month = 1:(nr+36),
+                             month = rep(1:12, length.out=nr+36)))
+pd2 &lt;- cbind(pd2, predict(b2, pd2, se = TRUE))
+pd2 &lt;- transform(pd2, upr = fit + (2*se.fit), lwr = fit - (2 * se.fit))
+```
+
+---
+
+# Atmospheric CO&lt;sub&gt;2&lt;/sub&gt; &amp;mdash; predict
+
+
+```r
+ggplot(pd2, aes(x = c.month, y = fit)) +
+    geom_ribbon(aes(ymin = lwr, ymax = upr), alpha = 0.2) +
+    geom_line(data = co2s, aes(c.month, co2), col = 'red') +
+    geom_line(alpha = 0.5)
+```
+
+![](gam-intro_files/figure-html/co2-example-9-1.svg)&lt;!-- --&gt;
+
+---
+
+# Example
+
+---
+
+# Galveston Bay
+
+.row[
+
+.col-6[
+Cross Validated question
+
+&gt; I have a dataset of water temperature measurements taken from a large waterbody at irregular intervals over a period of decades. (Galveston Bay, TX if you’re interested)
+
+&lt;https://stats.stackexchange.com/q/244042/1390&gt;
+
+]
+
+.col-6[
+
+.center[
+&lt;img src="/home/gavin/work/git/workshops/gam-intro-webinar-2020/repo/resources/cross-validated.png" width="1223" /&gt;
+]
+
+]
+]
+
+---
+
+# Galveston Bay
+
+
+```r
+galveston &lt;- read_csv(here('data', 'gbtemp.csv')) %&gt;%
+    mutate(datetime = as.POSIXct(paste(DATE, TIME), format = '%m/%d/%y %H:%M', tz = "CDT"),
+           STATION_ID = factor(STATION_ID), DoY = as.numeric(format(datetime, format = '%j')),
+           ToD = as.numeric(format(datetime, format = '%H')) +
+               (as.numeric(format(datetime, format = '%M')) / 60))
+galveston
+```
+
+```
+## # A tibble: 15,276 x 13
+##    STATION_ID DATE  TIME  LATITUDE LONGITUDE  YEAR MONTH   DAY SEASON
+##    &lt;fct&gt;      &lt;chr&gt; &lt;tim&gt;    &lt;dbl&gt;     &lt;dbl&gt; &lt;dbl&gt; &lt;dbl&gt; &lt;dbl&gt; &lt;chr&gt; 
+##  1 13296      6/20… 11:04     29.5     -94.8  1991     6    20 Summer
+##  2 13296      3/17… 09:30     29.5     -94.8  1992     3    17 Spring
+##  3 13296      9/23… 11:24     29.5     -94.8  1991     9    23 Fall  
+##  4 13296      9/23… 11:24     29.5     -94.8  1991     9    23 Fall  
+##  5 13296      6/20… 11:04     29.5     -94.8  1991     6    20 Summer
+##  6 13296      12/1… 10:15     29.5     -94.8  1991    12    17 Winter
+##  7 13296      6/29… 11:17     29.5     -94.8  1992     6    29 Summer
+##  8 13305      3/24… 11:53     29.6     -95.0  1987     3    24 Spring
+##  9 13305      4/2/… 13:39     29.6     -95.0  1987     4     2 Spring
+## 10 13305      8/11… 15:25     29.6     -95.0  1987     8    11 Summer
+## # … with 15,266 more rows, and 4 more variables: MEASUREMENT &lt;dbl&gt;,
+## #   datetime &lt;dttm&gt;, DoY &lt;dbl&gt;, ToD &lt;dbl&gt;
+```
+
+---
+
+# Galveston Bay model description
+
+$$
+`\begin{align}
+  \begin{split}
+      \mathrm{E}(y_i) &amp; = \alpha + f_1(\text{ToD}_i) + f_2(\text{DoY}_i) + f_3(\text{Year}_i) + f_4(\text{x}_i, \text{y}_i) + \\
+        &amp; \quad f_5(\text{DoY}_i, \text{Year}_i) + f_6(\text{x}_i, \text{y}_i, \text{ToD}_i) + \\
+        &amp; \quad f_7(\text{x}_i, \text{y}_i, \text{DoY}_i) + f_8(\text{x}_i, \text{y}_i, \text{Year}_i)
+  \end{split}
+\end{align}`
+$$
+
+* `\(\alpha\)` is the model intercept,
+* `\(f_1(\text{ToD}_i)\)` is a smooth function of time of day,
+* `\(f_2(\text{DoY}_i)\)` is a smooth function of day of year ,
+* `\(f_3(\text{Year}_i)\)` is a smooth function of year,
+* `\(f_4(\text{x}_i, \text{y}_i)\)` is a 2D smooth of longitude and latitude,
+
+---
+
+# Galveston Bay model description
+
+$$
+`\begin{align}
+  \begin{split}
+      \mathrm{E}(y_i) &amp; = \alpha + f_1(\text{ToD}_i) + f_2(\text{DoY}_i) + f_3(\text{Year}_i) + f_4(\text{x}_i, \text{y}_i) + \\
+        &amp; \quad f_5(\text{DoY}_i, \text{Year}_i) + f_6(\text{x}_i, \text{y}_i, \text{ToD}_i) + \\
+        &amp; \quad f_7(\text{x}_i, \text{y}_i, \text{DoY}_i) + f_8(\text{x}_i, \text{y}_i, \text{Year}_i)
+  \end{split}
+\end{align}`
+$$
+
+* `\(f_5(\text{DoY}_i, \text{Year}_i)\)` is a tensor product smooth of day of year and year,
+* `\(f_6(\text{x}_i, \text{y}_i, \text{ToD}_i)\)` tensor product smooth of location &amp; time of day
+* `\(f_7(\text{x}_i, \text{y}_i, \text{DoY}_i)\)` tensor product smooth of location day of year&amp; 
+* `\(f_8(\text{x}_i, \text{y}_i, \text{Year}_i\)` tensor product smooth of location &amp; year
+
+---
+
+# Galveston Bay model description
+
+$$
+`\begin{align}
+  \begin{split}
+      \mathrm{E}(y_i) &amp; = \alpha + f_1(\text{ToD}_i) + f_2(\text{DoY}_i) + f_3(\text{Year}_i) + f_4(\text{x}_i, \text{y}_i) + \\
+        &amp; \quad f_5(\text{DoY}_i, \text{Year}_i) + f_6(\text{x}_i, \text{y}_i, \text{ToD}_i) + \\
+        &amp; \quad f_7(\text{x}_i, \text{y}_i, \text{DoY}_i) + f_8(\text{x}_i, \text{y}_i, \text{Year}_i)
+  \end{split}
+\end{align}`
+$$
+
+Effectively, the first four smooths are the main effects of
+
+1. time of day,
+2. season,
+3. long-term trend,
+4. spatial variation
+
+---
+
+# Galveston Bay model description
+
+$$
+`\begin{align}
+  \begin{split}
+      \mathrm{E}(y_i) &amp; = \alpha + f_1(\text{ToD}_i) + f_2(\text{DoY}_i) + f_3(\text{Year}_i) + f_4(\text{x}_i, \text{y}_i) + \\
+        &amp; \quad f_5(\text{DoY}_i, \text{Year}_i) + f_6(\text{x}_i, \text{y}_i, \text{ToD}_i) + \\
+        &amp; \quad f_7(\text{x}_i, \text{y}_i, \text{DoY}_i) + f_8(\text{x}_i, \text{y}_i, \text{Year}_i)
+  \end{split}
+\end{align}`
+$$
+
+whilst the remaining tensor product smooths model smooth interactions between the stated covariates, which model
+
+5. how the seasonal pattern of temperature varies over time,
+6. how the time of day effect varies spatially,
+7. how the seasonal effect varies spatially, and
+8. how the long-term trend varies spatially
+
+---
+
+# Galveston Bay &amp;mdash; full model
+
+
+```r
+knots &lt;- list(DoY = c(0.5, 366.5))
+m &lt;- bam(MEASUREMENT ~
+             s(ToD, k = 10) +
+             s(DoY, k = 12, bs = 'cc') +
+             s(YEAR, k = 30) +
+             s(LONGITUDE, LATITUDE, k = 100, bs = 'ds', m = c(1, 0.5)) +
+             ti(DoY, YEAR, bs = c('cc', 'tp'), k = c(12, 15)) +
+             ti(LONGITUDE, LATITUDE, ToD, d = c(2,1), bs = c('ds','tp'),
+                m = list(c(1, 0.5), NA), k = c(20, 10)) +
+             ti(LONGITUDE, LATITUDE, DoY, d = c(2,1), bs = c('ds','cc'),
+                m = list(c(1, 0.5), NA), k = c(25, 12)) +
+             ti(LONGITUDE, LATITUDE, YEAR, d = c(2,1), bs = c('ds','tp'),
+                m = list(c(1, 0.5), NA), k = c(25, 15)),
+         data = galveston, method = 'fREML', knots = knots,
+         nthreads = c(4, 1), discrete = TRUE)
+```
+
+---
+
+# Galveston Bay &amp;mdash; simpler model
+
+
+```r
+m.sub &lt;- bam(MEASUREMENT ~
+             s(ToD, k = 10) +
+             s(DoY, k = 12, bs = 'cc') +
+             s(YEAR, k = 30) +
+             s(LONGITUDE, LATITUDE, k = 100, bs = 'ds', m = c(1, 0.5)) +
+             ti(DoY, YEAR, bs = c('cc', 'tp'), k = c(12, 15)),
+         data = galveston, method = 'fREML', knots = knots,
+         nthreads = c(4, 1), discrete = TRUE)
+```
+
+---
+
+# Galveston Bay &amp;mdash; simpler model?
+
+
+```r
+AIC(m, m.sub)
+```
+
+```
+##             df      AIC
+## m     448.2885 58577.37
+## m.sub 240.6117 59181.10
+```
+---
+
+# Galveston Bay &amp;mdash; simpler model?
+
+.smaller[
+
+```r
+anova(m, m.sub, test = 'F')
+```
+
+```
+## Analysis of Deviance Table
+## 
+## Model 1: MEASUREMENT ~ s(ToD, k = 10) + s(DoY, k = 12, bs = "cc") + s(YEAR, 
+##     k = 30) + s(LONGITUDE, LATITUDE, k = 100, bs = "ds", m = c(1, 
+##     0.5)) + ti(DoY, YEAR, bs = c("cc", "tp"), k = c(12, 15)) + 
+##     ti(LONGITUDE, LATITUDE, ToD, d = c(2, 1), bs = c("ds", "tp"), 
+##         m = list(c(1, 0.5), NA), k = c(20, 10)) + ti(LONGITUDE, 
+##     LATITUDE, DoY, d = c(2, 1), bs = c("ds", "cc"), m = list(c(1, 
+##         0.5), NA), k = c(25, 12)) + ti(LONGITUDE, LATITUDE, YEAR, 
+##     d = c(2, 1), bs = c("ds", "tp"), m = list(c(1, 0.5), NA), 
+##     k = c(25, 15))
+## Model 2: MEASUREMENT ~ s(ToD, k = 10) + s(DoY, k = 12, bs = "cc") + s(YEAR, 
+##     k = 30) + s(LONGITUDE, LATITUDE, k = 100, bs = "ds", m = c(1, 
+##     0.5)) + ti(DoY, YEAR, bs = c("cc", "tp"), k = c(12, 15))
+##   Resid. Df Resid. Dev      Df Deviance      F    Pr(&gt;F)    
+## 1     14736      39029                                      
+## 2     15019      41722 -283.15  -2692.5 3.6147 &lt; 2.2e-16 ***
+## ---
+## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+```
+]
+
+---
+
+# Galveston Bay &amp;mdash; full model summary
+
+.small[
+
+```r
+summary(m)
+```
+
+```
+## 
+## Family: gaussian 
+## Link function: identity 
+## 
+## Formula:
+## MEASUREMENT ~ s(ToD, k = 10) + s(DoY, k = 12, bs = "cc") + s(YEAR, 
+##     k = 30) + s(LONGITUDE, LATITUDE, k = 100, bs = "ds", m = c(1, 
+##     0.5)) + ti(DoY, YEAR, bs = c("cc", "tp"), k = c(12, 15)) + 
+##     ti(LONGITUDE, LATITUDE, ToD, d = c(2, 1), bs = c("ds", "tp"), 
+##         m = list(c(1, 0.5), NA), k = c(20, 10)) + ti(LONGITUDE, 
+##     LATITUDE, DoY, d = c(2, 1), bs = c("ds", "cc"), m = list(c(1, 
+##         0.5), NA), k = c(25, 12)) + ti(LONGITUDE, LATITUDE, YEAR, 
+##     d = c(2, 1), bs = c("ds", "tp"), m = list(c(1, 0.5), NA), 
+##     k = c(25, 15))
+## 
+## Parametric coefficients:
+##             Estimate Std. Error t value Pr(&gt;|t|)    
+## (Intercept) 21.72388    0.08177   265.7   &lt;2e-16 ***
+## ---
+## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+## 
+## Approximate significance of smooth terms:
+##                                 edf  Ref.df        F  p-value    
+## s(ToD)                        3.507   4.256    6.157 4.09e-05 ***
+## s(DoY)                        9.557  10.000 3343.501  &lt; 2e-16 ***
+## s(YEAR)                      27.992  28.741   58.071  &lt; 2e-16 ***
+## s(LONGITUDE,LATITUDE)        55.993  99.000    5.076  &lt; 2e-16 ***
+## ti(DoY,YEAR)                131.368 140.000   34.576  &lt; 2e-16 ***
+## ti(ToD,LONGITUDE,LATITUDE)   41.980 171.000    0.854  &lt; 2e-16 ***
+## ti(DoY,LONGITUDE,LATITUDE)   83.097 240.000    1.218  &lt; 2e-16 ***
+## ti(YEAR,LONGITUDE,LATITUDE)  85.258 329.000    1.094  &lt; 2e-16 ***
+## ---
+## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+## 
+## R-sq.(adj) =   0.94   Deviance explained = 94.2%
+## fREML =  29808  Scale est. = 2.6307    n = 15276
+```
+]
+
+---
+
+# Galveston Bay &amp;mdash; full model plot
+
+
+```r
+plot(m, pages = 1, scheme = 2, shade = TRUE)
+```
+
+![](gam-intro_files/figure-html/galveston-full-model-plot-1.svg)&lt;!-- --&gt;
+
+---
+
+# Galveston Bay &amp;mdash; full model plot
+
+
+```r
+draw(m, scales = 'free')
+```
+
+![](gam-intro_files/figure-html/galveston-full-model-draw-1.svg)&lt;!-- --&gt;
+
+---
+
+# Galveston Bay &amp;mdash; predict
+
+
+```r
+pdata &lt;- with(galveston,
+              expand.grid(ToD = 12,
+                          DoY = 180,
+                          YEAR = seq(min(YEAR), max(YEAR), by = 1),
+                          LONGITUDE = seq(min(LONGITUDE), max(LONGITUDE), length = 100),
+                          LATITUDE  = seq(min(LATITUDE), max(LATITUDE), length = 100)))
+fit &lt;- predict(m, pdata)
+ind &lt;- exclude.too.far(pdata$LONGITUDE, pdata$LATITUDE,
+                       galveston$LONGITUDE, galveston$LATITUDE, dist = 0.1)
+fit[ind] &lt;- NA
+pred &lt;- cbind(pdata, Fitted = fit)
+```
+
+---
+
+# Galveston Bay &amp;mdash; plot
+
+
+```r
+plt &lt;- ggplot(pred, aes(x = LONGITUDE, y = LATITUDE)) +
+    geom_raster(aes(fill = Fitted)) + facet_wrap(~ YEAR, ncol = 12) +
+    scale_fill_viridis(name = expression(degree*C), option = 'plasma', na.value = 'transparent') +
+    coord_quickmap() +
+    theme(legend.position = 'right')
+plt
+```
+
+---
+
+# Galveston Bay &amp;mdash; plot
+
+![](gam-intro_files/figure-html/galveston-full-predict-plot-1.svg)&lt;!-- --&gt;
+
+---
+
+# Galveston Bay &amp;mdash;
+
+
+
+.center[![](resources/galveston-animation.gif)]
+
+---
+
+# Galveston Bay &amp;mdash; plot trends
+
+
+```r
+pdata &lt;- with(galveston,
+              expand.grid(ToD = 12,
+                          DoY = c(1, 90, 180, 270),
+                          YEAR = seq(min(YEAR), max(YEAR), length = 500),
+                          LONGITUDE = -94.8751,
+                          LATITUDE  = 29.50866))
+
+fit &lt;- data.frame(predict(m, newdata = pdata, se.fit = TRUE))
+fit &lt;- transform(fit, upper = fit + (2 * se.fit), lower = fit - (2 * se.fit))
+pred &lt;- cbind(pdata, fit)
+
+plt2 &lt;- ggplot(pred, aes(x = YEAR, y = fit, group = factor(DoY))) +
+    geom_ribbon(aes(ymin = lower, ymax = upper), fill = 'grey', alpha = 0.5) +
+    geom_line() + facet_wrap(~ DoY, scales = 'free_y') +
+    labs(x = NULL, y = expression(Temperature ~ (degree * C)))
+plt2
+```
+
+---
+
+# Galveston Bay &amp;mdash; plot trends
+
+![](gam-intro_files/figure-html/galveston-trends-by-month-1.svg)&lt;!-- --&gt;
+
+---
+
+# Next steps
+
+Read Simon Wood's book!
+
+Lots more material on our ESA GAM Workshop site
+
+[https://noamross.github.io/mgcv-esa-workshop/]()
+
+Noam Ross' free GAM Course
+
+&lt;https://noamross.github.io/gams-in-r-course/&gt;
+
+A couple of papers:
+
+.smaller[
+1. Simpson, G.L., 2018. Modelling Palaeoecological Time Series Using Generalised Additive Models. Frontiers in Ecology and Evolution 6, 149. https://doi.org/10.3389/fevo.2018.00149
+2. Pedersen, E.J., Miller, D.L., Simpson, G.L., Ross, N., 2019. Hierarchical generalized additive models in ecology: an introduction with mgcv. PeerJ 7, e6876. https://doi.org/10.7717/peerj.6876
+]
+
+Also see my blog: [www.fromthebottomoftheheap.net](http://www.fromthebottomoftheheap.net)
+
+---
+
+# Acknowledgments
+
+.row[
+
+.col-6[
+
+### Funding
+
+.center[![:scale 70%](./resources/NSERC_C.svg)]
+]
+
+.col-6[
+
+### Fellow GAM colleagues
+
+David Miller
+
+Eric Pedersen
+
+Noam Ross
+
+]
+
+]
+
+### Slides
+
+* HTML Slide deck [bit.ly/gam-webinar](https://bit.ly/gam-webinar) &amp;copy; Simpson (2020) [![Creative Commons Licence](https://i.creativecommons.org/l/by/4.0/88x31.png)](http://creativecommons.org/licenses/by/4.0/)
+* RMarkdown [Source](https://bit.ly/gam-webinar-git)
+
+---
+
+# References
+
+- [Marra &amp; Wood (2011) *Computational Statistics and Data Analysis* **55** 2372&amp;ndash;2387.](http://doi.org/10.1016/j.csda.2011.02.004)
+- [Marra &amp; Wood (2012) *Scandinavian Journal of Statistics, Theory and Applications* **39**(1), 53&amp;ndash;74.](http://doi.org/10.1111/j.1467-9469.2011.00760.x.)
+- [Nychka (1988) *Journal of the American Statistical Association* **83**(404) 1134&amp;ndash;1143.](http://doi.org/10.1080/01621459.1988.10478711)
+- Wood (2017) *Generalized Additive Models: An Introduction with R*. Chapman and Hall/CRC. (2nd Edition)
+- [Wood (2013a) *Biometrika* **100**(1) 221&amp;ndash;228.](http://doi.org/10.1093/biomet/ass048)
+- [Wood (2013b) *Biometrika* **100**(4) 1005&amp;ndash;1010.](http://doi.org/10.1093/biomet/ast038)
+- [Wood et al (2016) *JASA* **111** 1548&amp;ndash;1563](https://doi.org/10.1080/01621459.2016.1180986)
+    </textarea>
+<style data-target="print-only">@media screen {.remark-slide-container{display:block;}.remark-slide-scaler{box-shadow:none;}}</style>
+<script src="https://remarkjs.com/downloads/remark-latest.min.js"></script>
+<script src="macros.js"></script>
+<script>var slideshow = remark.create({
+"highlightStyle": "github",
+"highlightLines": true,
+"countIncrementalSlides": false,
+"ratio": "16:9"
+});
+if (window.HTMLWidgets) slideshow.on('afterShowSlide', function (slide) {
+  window.dispatchEvent(new Event('resize'));
+});
+(function(d) {
+  var s = d.createElement("style"), r = d.querySelector(".remark-slide-scaler");
+  if (!r) return;
+  s.type = "text/css"; s.innerHTML = "@page {size: " + r.style.width + " " + r.style.height +"; }";
+  d.head.appendChild(s);
+})(document);
+
+(function(d) {
+  var el = d.getElementsByClassName("remark-slides-area");
+  if (!el) return;
+  var slide, slides = slideshow.getSlides(), els = el[0].children;
+  for (var i = 1; i < slides.length; i++) {
+    slide = slides[i];
+    if (slide.properties.continued === "true" || slide.properties.count === "false") {
+      els[i - 1].className += ' has-continuation';
+    }
+  }
+  var s = d.createElement("style");
+  s.type = "text/css"; s.innerHTML = "@media print { .has-continuation { display: none; } }";
+  d.head.appendChild(s);
+})(document);
+// delete the temporary CSS (for displaying all slides initially) when the user
+// starts to view slides
+(function() {
+  var deleted = false;
+  slideshow.on('beforeShowSlide', function(slide) {
+    if (deleted) return;
+    var sheets = document.styleSheets, node;
+    for (var i = 0; i < sheets.length; i++) {
+      node = sheets[i].ownerNode;
+      if (node.dataset["target"] !== "print-only") continue;
+      node.parentNode.removeChild(node);
+    }
+    deleted = true;
+  });
+})();
+(function() {
+  "use strict"
+  // Replace <script> tags in slides area to make them executable
+  var scripts = document.querySelectorAll(
+    '.remark-slides-area .remark-slide-container script'
+  );
+  if (!scripts.length) return;
+  for (var i = 0; i < scripts.length; i++) {
+    var s = document.createElement('script');
+    var code = document.createTextNode(scripts[i].textContent);
+    s.appendChild(code);
+    var scriptAttrs = scripts[i].attributes;
+    for (var j = 0; j < scriptAttrs.length; j++) {
+      s.setAttribute(scriptAttrs[j].name, scriptAttrs[j].value);
+    }
+    scripts[i].parentElement.replaceChild(s, scripts[i]);
+  }
+})();
+(function() {
+  var links = document.getElementsByTagName('a');
+  for (var i = 0; i < links.length; i++) {
+    if (/^(https?:)?\/\//.test(links[i].getAttribute('href'))) {
+      links[i].target = '_blank';
+    }
+  }
+})();
+// adds .remark-code-has-line-highlighted class to <pre> parent elements
+// of code chunks containing highlighted lines with class .remark-code-line-highlighted
+(function(d) {
+  const hlines = d.querySelectorAll('.remark-code-line-highlighted');
+  const preParents = [];
+  const findPreParent = function(line, p = 0) {
+    if (p > 1) return null; // traverse up no further than grandparent
+    const el = line.parentElement;
+    return el.tagName === "PRE" ? el : findPreParent(el, ++p);
+  };
+
+  for (let line of hlines) {
+    let pre = findPreParent(line);
+    if (pre && !preParents.includes(pre)) preParents.push(pre);
+  }
+  preParents.forEach(p => p.classList.add("remark-code-has-line-highlighted"));
+})(document);</script>
+
+<script>
+slideshow._releaseMath = function(el) {
+  var i, text, code, codes = el.getElementsByTagName('code');
+  for (i = 0; i < codes.length;) {
+    code = codes[i];
+    if (code.parentNode.tagName !== 'PRE' && code.childElementCount === 0) {
+      text = code.textContent;
+      if (/^\\\((.|\s)+\\\)$/.test(text) || /^\\\[(.|\s)+\\\]$/.test(text) ||
+          /^\$\$(.|\s)+\$\$$/.test(text) ||
+          /^\\begin\{([^}]+)\}(.|\s)+\\end\{[^}]+\}$/.test(text)) {
+        code.outerHTML = code.innerHTML;  // remove <code></code>
+        continue;
+      }
+    }
+    i++;
+  }
+};
+slideshow._releaseMath(document);
+</script>
+<!-- dynamically load mathjax for compatibility with self-contained -->
+<script>
+(function () {
+  var script = document.createElement('script');
+  script.type = 'text/javascript';
+  script.src  = 'https://mathjax.rstudio.com/latest/MathJax.js?config=TeX-MML-AM_CHTML';
+  if (location.protocol !== 'file:' && /^https?:/.test(script.src))
+    script.src  = script.src.replace(/^https?:/, '');
+  document.getElementsByTagName('head')[0].appendChild(script);
+})();
+</script>
+  </body>
+</html>
