@@ -131,6 +131,7 @@ We can keep on adding ever more powers of `\(\boldsymbol{x}\)` to the model &amp
 **Runge phenomenon** &amp;mdash; oscillations at the edges of an interval &amp;mdash; means simply moving to higher-order polynomials doesn't always improve accuracy
 
 ---
+class: inverse middle center subsection
 
 # GAMs offer a solution
 
@@ -220,6 +221,7 @@ summary(m)
 ![](gam-intro_files/figure-html/hadcrtemp-plot-gam-1.svg)&lt;!-- --&gt;
 
 ---
+class: inverse middle center big-subsection
 
 # GAMs
 
@@ -500,6 +502,11 @@ In **mgcv**, default `\(k\)` values are arbitrary &amp;mdash; after choosing the
 4. Need to make sure your smooths are **wiggly enough**
 
 ---
+class: middle center inverse subsection
+
+# Example
+
+---
 
 # Portugese larks
 
@@ -658,6 +665,40 @@ ggplot(data.frame(Fitted = fitted(crest2),
 ![](gam-intro_files/figure-html/gam-check-aggregated-lark-1.svg)&lt;!-- --&gt;
 ]
 
+---
+class: inverse middle center subsection
+
+# A cornucopia of smooths
+
+---
+
+# A cornucopia of smooths
+
+The type of smoother is controlled by the `bs` argument (think *basis*)
+
+The default is a low-rank thin plate spline `bs = 'tp'`
+
+Many others available
+
+.row[
+.col-6[
+
+* Cubic splines `bs = 'cr'`
+* P splines `bs = 'ps'`
+* Cyclic splines `bs = 'cc'` or `bs = 'cp'`
+* Adaptive splines `bs = 'ad'`
+* Random effect `bs = 're'`
+* Factor smooths `bs = 'fs'`
+]
+.col-6[
+
+* Duchon splines `bs = 'ds'`
+* Spline on the sphere `bs = 'sos'`
+* MRFs `bs = 'mrf'`
+* Soap-film smooth `bs = 'so'`
+* Gaussian process `bs = 'gp'`
+]
+]
 
 ---
 class: inverse center middle subsection
@@ -895,7 +936,7 @@ gam.check(negbin_model, rep = 500)
 
 
 ```r
-appraise(negbin_model)
+appraise(negbin_model, method = 'simulate')
 ```
 
 ![](gam-intro_files/figure-html/appraise-gam-check-example-1.svg)&lt;!-- --&gt;

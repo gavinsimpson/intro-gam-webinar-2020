@@ -484,8 +484,8 @@ negbin_model <- gam(y_negbinom ~ s(x1, k=12) + s(x2, k=12), family = nb, method 
 gam.check(negbin_model, rep = 500)
 
 
-## ----appraise-gam-check-example-----------------------------------------------
-appraise(negbin_model)
+## ----appraise-gam-check-example, fig.height = 5.5-----------------------------
+appraise(negbin_model, method = 'simulate')
 
 
 ## ----setup-shrinkage-example--------------------------------------------------
