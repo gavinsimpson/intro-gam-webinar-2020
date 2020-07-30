@@ -916,15 +916,15 @@ There are multiple ways to build tensor products in *mgcv*
 
 # Factor smooth interactions
 
-Two ways to have a smooth of a continuous variable interact with a categorical variable
+Two ways for factor smooth interactions
 
 1. `by` variable smooths
-    * `by` variable smooths fit an entirely separate smooth function for each level of the factor
+    * entirely separate smooth function for each level of the factor
 	* each has it's own smoothness parameter
 	* centred (no group means) so include factor as a fixed effect
 	* `y ~ f + s(x, by = f)`
 2. `bs = 'fs'` basis
-    * `fs` smooths fit a smooth function for each level of the function
+    * smooth function for each level of the function
 	* share a common smoothness parameter
 	* fully penalized; include group means
 	* closer to random effects
