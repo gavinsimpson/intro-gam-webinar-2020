@@ -145,7 +145,7 @@ Assumptions
 An **additive** model address the first of these
 
 ---
-class: inverse center middle
+class: inverse center middle subsection
 
 # Why bother with anything more complex?
 
@@ -850,6 +850,121 @@ Many others available
 ]
 
 ---
+
+# A bestiary of conditional distributions
+
+A GAM is just a fancy GLM
+
+Simon Wood & colleagues (2016) have extended the *mgcv* methods to some non-exponential family distributions
+
+.row[
+.col-6[
+* `binomial()`
+* `poisson()`
+* `Gamma()`
+* `inverse.gaussian()`
+* `nb()`
+* `tw()`
+* `mvn()`
+* `multinom()`
+]
+.col-6[
+* `betar()`
+* `scat()`
+* `gaulss()`
+* `ziplss()`
+* `twlss()`
+* `cox.ph()`
+* `gamals()`
+* `ocat()`
+]
+]
+
+---
+
+# Smooth interactions
+
+Two ways to fit smooth interactions
+
+1. Bivariate (or higher order) thin plate splines
+    * `s(x, z, bs = 'tp')`
+    * Isotropic; single smoothness parameter for the smooth
+	* Sensitive to scales of `x` and `z`
+2. Tensor product smooths
+    * Separate marginal basis for each smooth, separate smoothness parameters
+	* Invariant to scales of `x` and `z`
+	* Use for interactions when variables are in different units
+	* `te(x, z)`
+
+---
+
+# Tensor product smooths
+
+There are multiple ways to build tensor products in *mgcv*
+
+1. `te(x, z)`
+2. `t2(x, z)`
+3. `s(x) + s(z) + ti(x, z)`
+
+`te()` is the most general form but not usable in `gamm4::gamm4()` or *brms*
+
+`t2()` is an alternative implementation that does work in `gamm4::gamm4()` or *brms*
+
+`ti()` fits pure smooth interactions; where the main effects of `x` and `z` have been removed from the basis
+
+---
+
+# Factor smooth interactions
+
+Two ways to have a smooth of a continuous variable interact with a categorical variable
+
+1. `by` variable smooths
+    * `by` variable smooths fit an entirely separate smooth function for each level of the factor
+	* each has it's own smoothness parameter
+	* centred (no group means) so include factor as a fixed effect
+	* `y ~ f + s(x, by = f)`
+2. `bs = 'fs'` basis
+    * `fs` smooths fit a smooth function for each level of the function
+	* share a common smoothness parameter
+	* fully penalized; include group means
+	* closer to random effects
+	* `y ~ s(x, f, bs = 'fs')`
+
+---
+
+# Random effects
+
+When fitted with REML or ML, smooths can be viewed as just fancy random effects
+
+Inverse is true too; random effects can be viewed as smooths
+
+If you have simple random effects you can fit those in `gam()` and `bam()` without needing the more complex GAMM functions `gamm()` or `gamm4::gamm4()`
+
+These two models are equivalent
+
+```{r ranefs}
+m_nlme <- lme(travel ~ 1, data = Rail, ~ 1 | Rail, method = "REML") 
+
+m_gam  <- gam(travel ~ s(Rail, bs = "re"), data = Rail, method = "REML")
+```
+
+---
+
+# Random effects
+
+The random effect basis `bs = 're'` is not as computationally efficient as *nlme* or *lme4* for fitting
+
+* complex random effects terms, or
+* random effects with many levels
+
+Instead see `gamm()` and `gamm4::gamm4()`
+
+* `gamm()` fits using `lme()`
+* `gamm4::gamm4()` fits using `lmer()` or `glmer()`
+
+For non Gaussian models use `gamm4::gamm4()`
+
+---
 class: inverse center middle subsection
 
 # Model checking
@@ -909,7 +1024,7 @@ ggplot(aes(x,y), data= model_data)+
 ```
 
 ---
-class: inverse center middle
+class: inverse center middle subsection
 
 # How do we test how well our model fits?
 
@@ -961,7 +1076,7 @@ plot_grid(p1, p3, p5, p2, p4, p6, ncol = 3, align = 'hv', axis = 'lrtb')
 ```
 
 ---
-class: inverse middle center
+class: inverse middle center subsection
 
 # gam.check() part 1: do you have the right functional form?
 
@@ -1032,7 +1147,7 @@ class: inverse middle center subsection
 # Model diagnostics
 
 ---
-class: inverse middle center
+class: inverse middle center subsection
 
 # Using gam.check() part 2: visual checks
 
@@ -1088,7 +1203,7 @@ appraise(negbin_model, method = 'simulate')
 ```
 
 ---
-class: inverse center middle
+class: inverse center middle subsection
 
 # Model selection
 
@@ -1315,9 +1430,18 @@ par(op)
 ```
 
 ---
-class: inverse center middle
+class: inverse center middle subsection
 
 # *p* values for smooths
+
+---
+
+# Example
+
+.smaller[
+```{r shrinkage-example-summary}
+```
+]
 
 ---
 
@@ -1502,6 +1626,7 @@ ggplot(pd2, aes(x = c.month, y = fit)) +
 ```
 
 ---
+class: inverse middle center subsection
 
 # Example
 

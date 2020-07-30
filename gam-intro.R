@@ -369,6 +369,12 @@ ggplot(data.frame(Fitted = fitted(crest2),
        aes(Fitted, Resid)) + geom_point() 
 
 
+## ----ranefs-------------------------------------------------------------------
+m_nlme <- lme(travel ~ 1, data = Rail, ~ 1 | Rail, method = "REML") 
+
+m_gam  <- gam(travel ~ s(Rail, bs = "re"), data = Rail, method = "REML")
+
+
 ## ----misspecify, echo = FALSE-------------------------------------------------
 set.seed(15)
 model_list = c("right model", 
@@ -553,6 +559,10 @@ plot(b, shade=TRUE)
 plot(b, shade = TRUE, seWithMean = TRUE) ## better coverage intervals
 layout(1)
 par(op)
+
+
+## ----shrinkage-example-summary------------------------------------------------
+summary(b)
 
 
 ## ----aic-example, echo = TRUE-------------------------------------------------
